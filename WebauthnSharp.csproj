@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net472;net8.0;net10.0</TargetFrameworks>
+
+    <OutputType>Library</OutputType>
+    <RootNamespace>WebauthnSharp</RootNamespace>
+    <AssemblyName>WebauthnSharp</AssemblyName>
+
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>WebauthnSharp</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Vahidreza Arian</Authors>
+    <Description>WebAuthn / FIDO2 library for .NET – builds on CtapSharp for authenticator communication</Description>
+    <PackageTags>webauthn;fido2;passkeys;ctap;fido</PackageTags>
+    <Title>Webauthn Library for C#</Title>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+	<PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/vahidrezaarian/WebauthnSharp</RepositoryUrl>
+    <PackageReleaseNotes>Initial release of a class library which provides passkey creation and authentication.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CtapSharp" Version="1.0.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="PeterO.Cbor" Version="4.5.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+</Project>
