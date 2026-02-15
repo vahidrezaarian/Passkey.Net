@@ -4,21 +4,21 @@
     <TargetFrameworks>net472;net8.0-windows;net10.0-windows</TargetFrameworks>
 
     <OutputType>Library</OutputType>
-    <RootNamespace>WebauthnSharp</RootNamespace>
-    <AssemblyName>WebauthnSharp</AssemblyName>
+    <RootNamespace>Passkey.Net</RootNamespace>
+    <AssemblyName>Passkey.Net</AssemblyName>
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageId>WebauthnSharp</PackageId>
+    <PackageId>Passkey.Net</PackageId>
     <Version>1.0.0</Version>
     <Authors>Vahidreza Arian</Authors>
-    <Description>WebAuthn / FIDO2 library for .NET – builds on CtapSharp for authenticator communication</Description>
-    <PackageTags>webauthn;fido2;passkeys;ctap;fido</PackageTags>
-    <Title>Webauthn Library for C#</Title>
+    <Description>.NET and .NET Framework library for FIDO2 passkey creation and authentication.</Description>
+    <PackageTags>webauthn;fido2;passkeys;ctap;fido;passkey</PackageTags>
+    <Title>Passkey Library for C#</Title>
     <PackageReadmeFile>README.md</PackageReadmeFile>
 	<PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <RepositoryUrl>https://github.com/vahidrezaarian/WebauthnSharp</RepositoryUrl>
+    <RepositoryUrl>https://github.com/vahidrezaarian/Passkey.Net</RepositoryUrl>
     <PackageReleaseNotes>Initial release of a class library which provides passkey creation and authentication.</PackageReleaseNotes>
   </PropertyGroup>
 
@@ -28,7 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CtapSharp" Version="1.0.0" />
+    <PackageReference Include="Ctap.Net" Version="1.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="PeterO.Cbor" Version="4.5.5" />
   </ItemGroup>

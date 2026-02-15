@@ -1,11 +1,10 @@
-﻿// WebauthnSharp
+﻿// Passkey.Net
 // Copyright (c) 2026 Vahidreza Arian
 // 
-// This file is part of CtapSharp and is licensed under the MIT license.
+// This file is part of Passkey.Net and is licensed under the MIT license.
 // See LICENSE file in the project root for full license information.
 
-using CtapSharp;
-using CtapSharp.Transports;
+using Ctap.Net.Transports;
 using Newtonsoft.Json.Linq;
 using PeterO.Cbor;
 using System;
@@ -15,7 +14,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace WebauthnLib
+namespace Passkey.Net
 {
     public enum UserPresence
     {   
@@ -52,9 +51,9 @@ namespace WebauthnLib
         }
     }
 
-    public class Webauthn: IDisposable
+    public class Passkey: IDisposable
     {
-        private readonly Ctap _ctap;
+        private readonly Ctap.Net.Ctap _ctap;
         private class KeyAgreement
         {
             public readonly byte[] Secret;
@@ -68,7 +67,7 @@ namespace WebauthnLib
         }
         private KeyAgreement _keyAgreement;
 
-        public Webauthn(FidoSecurityKeyDevice device) 
+        public Passkey(FidoSecurityKeyDevice device) 
         {
             _ctap = new Ctap(device);
         }
@@ -143,12 +142,12 @@ namespace WebauthnLib
             return CreateAuthenticationResultJson(response.ToCborObject(), clientDataJson);
         }
 
-        public JObject Register(string request, bool uv, bool rk = true, string pin = null)
+        public JObject Create(string request, bool uv, bool rk = true, string pin = null)
         {
-            return Register(JObject.Parse(request), uv, rk, pin);
+            return Create(JObject.Parse(request), uv, rk, pin);
         }
 
-        public JObject Register(JObject request, bool uv, bool rk = true, string pin = null)
+        public JObject Create(JObject request, bool uv, bool rk = true, string pin = null)
         {
             JArray excludeCredentials = null;
             if (request.ContainsKey("excludeCredentials"))
@@ -173,11 +172,11 @@ namespace WebauthnLib
                 userVerificationMethod = new UserVerificationMethod(UserVerificationType.BuiltIn);
             }
 
-            return Register(request["challenge"].ToString(), request["rp"] as JObject, request["user"] as JObject,
+            return Create(request["challenge"].ToString(), request["rp"] as JObject, request["user"] as JObject,
                 request["pubKeyCredParams"] as JArray, excludeCredentials, extensions, userVerificationMethod, rk);
         }
 
-        public JObject Register(string challenge, JObject rp, JObject user, JArray publickCredParams, JArray excludedCredentials = null, JObject extensions = null, UserVerificationMethod userVeritifcationMethod = null, bool residentKey = false, int timeout = 60000)
+        public JObject Create(string challenge, JObject rp, JObject user, JArray publickCredParams, JArray excludedCredentials = null, JObject extensions = null, UserVerificationMethod userVeritifcationMethod = null, bool residentKey = false, int timeout = 60000)
         {
             var clientDataJson = CreateClientDataJson(challenge, rp["id"].ToString(), "webauthn.create");
             var clientDataHash = Utilities.ComputeSha256(Encoding.UTF8.GetBytes(clientDataJson.ToString(Newtonsoft.Json.Formatting.None)));
