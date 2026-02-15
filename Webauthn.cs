@@ -113,7 +113,7 @@ namespace WebauthnLib
 
         public JObject Authenticate(string challenge, string rpid, JArray allowedCredentials = null, UserVerificationMethod userVeritifcationMethod = null, bool userPresence = true, JObject extensions = null, int timeout = 60000)
         {
-            var clientDataJson = CreateClientDataJson(challenge, rpid);
+            var clientDataJson = CreateClientDataJson(challenge, rpid, "webauthn.get");
             var clientDataHash = Utilities.ComputeSha256(Encoding.UTF8.GetBytes(clientDataJson.ToString(Newtonsoft.Json.Formatting.None)));
             CBORObject allowList = null;
             CBORObject extensionsCbor = null;
@@ -179,7 +179,7 @@ namespace WebauthnLib
 
         public JObject Register(string challenge, JObject rp, JObject user, JArray publickCredParams, JArray excludedCredentials = null, JObject extensions = null, UserVerificationMethod userVeritifcationMethod = null, bool residentKey = false, int timeout = 60000)
         {
-            var clientDataJson = CreateClientDataJson(challenge, rp["id"].ToString());
+            var clientDataJson = CreateClientDataJson(challenge, rp["id"].ToString(), "webauthn.create");
             var clientDataHash = Utilities.ComputeSha256(Encoding.UTF8.GetBytes(clientDataJson.ToString(Newtonsoft.Json.Formatting.None)));
             CBORObject excludeList = null;
             CBORObject extensionsCbor = null;
@@ -276,7 +276,7 @@ namespace WebauthnLib
             }
         }
 
-        private static JObject CreateClientDataJson(string challenge, string rpid, string type = "webauthn.get")
+        private static JObject CreateClientDataJson(string challenge, string rpid, string type)
         {
             return new JObject()
             {
