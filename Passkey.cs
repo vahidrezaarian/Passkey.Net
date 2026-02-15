@@ -4,7 +4,8 @@
 // This file is part of Passkey.Net and is licensed under the MIT license.
 // See LICENSE file in the project root for full license information.
 
-using Ctap.Net.Transports;
+using CtapDotNet;
+using CtapDotNet.Transports;
 using Newtonsoft.Json.Linq;
 using PeterO.Cbor;
 using System;
@@ -53,7 +54,7 @@ namespace Passkey.Net
 
     public class Passkey: IDisposable
     {
-        private readonly Ctap.Net.Ctap _ctap;
+        private readonly Ctap _ctap;
         private class KeyAgreement
         {
             public readonly byte[] Secret;
@@ -75,71 +76,6 @@ namespace Passkey.Net
         public void Dispose()
         {
             _ctap.Dispose();
-        }
-
-        public JObject Authenticate(string request, bool uv, bool up = true, string pin = null)
-        {
-            return Authenticate(JObject.Parse(request), uv, up, pin);
-        }
-
-        public JObject Authenticate(JObject request, bool uv, bool up = true, string pin = null)
-        {
-            JArray allowList = null;
-            if (request.ContainsKey("allowCredentials"))
-            {
-                allowList = request["allowCredentials"] as JArray;
-            }
-
-            var userVerificationMethod = new UserVerificationMethod(UserVerificationType.None);
-            if (pin != null)
-            {
-                var pinToken = GetPinToken(pin);
-                userVerificationMethod = new UserVerificationMethod(UserVerificationType.ClientPin, pinToken);
-            }
-            else if (uv)
-            {
-                userVerificationMethod = new UserVerificationMethod(UserVerificationType.BuiltIn);
-            }
-
-            JObject extensions = null;
-            if (request.ContainsKey("extensions"))
-            {
-                extensions = request["extensions"] as JObject;
-            }
-
-            return Authenticate(request["challenge"].ToString(), request["rpId"].ToString(), allowList, userVerificationMethod, up, extensions);
-        }
-
-        public JObject Authenticate(string challenge, string rpid, JArray allowedCredentials = null, UserVerificationMethod userVeritifcationMethod = null, bool userPresence = true, JObject extensions = null, int timeout = 60000)
-        {
-            var clientDataJson = CreateClientDataJson(challenge, rpid, "webauthn.get");
-            var clientDataHash = Utilities.ComputeSha256(Encoding.UTF8.GetBytes(clientDataJson.ToString(Newtonsoft.Json.Formatting.None)));
-            CBORObject allowList = null;
-            CBORObject extensionsCbor = null;
-            byte[] pinAuth = null;
-            int pinProtocol = 1;
-
-            if (allowedCredentials != null)
-            {
-                allowList = CreateCborCredentialsListFromJson(allowedCredentials);
-            }
-
-            if (extensions != null)
-            {
-                extensionsCbor = CreateAuthenticationExtensionCbor(extensions);
-            }
-
-            var options = CreateAuthenticationOptionsCbor(userVeritifcationMethod != null && userVeritifcationMethod.Type == UserVerificationType.BuiltIn, userPresence);
-
-            if (userVeritifcationMethod != null && userVeritifcationMethod.Type == UserVerificationType.ClientPin)
-            {
-                var hmac = new HMACSHA256(userVeritifcationMethod.PinToken);
-                pinAuth = hmac.ComputeHash(clientDataHash).Take(16).ToArray();
-                pinProtocol = userVeritifcationMethod.PinProtocol;
-            }
-
-            var response = _ctap.GetAssertion(rpid, clientDataHash, allowList?.EncodeToBytes(), extensionsCbor?.EncodeToBytes(), options?.EncodeToBytes(), pinAuth, pinProtocol);
-            return CreateAuthenticationResultJson(response.ToCborObject(), clientDataJson);
         }
 
         public JObject Create(string request, bool uv, bool rk = true, string pin = null)
@@ -207,6 +143,81 @@ namespace Passkey.Net
             var response = _ctap.MakeCredential(clientDataHash, CBORObject.FromJSONString(rp.ToString(Newtonsoft.Json.Formatting.None))?.EncodeToBytes(), CreateUserCborObjectFromJson(user)?.EncodeToBytes(),
                 CBORObject.FromJSONString(publickCredParams.ToString(Newtonsoft.Json.Formatting.None))?.EncodeToBytes(), excludeList?.EncodeToBytes(), extensionsCbor?.EncodeToBytes(), options?.EncodeToBytes(), pinAuth, pinProtocol);
             return CreateRegistrationResultJson(response.ToCborObject(), clientDataJson);
+        }
+
+        public JObject Create(string challenge, string rpJsonString, string userJsonString, string publickCredParamsJsonArrayString, string excludedCredentialsJsonArrayString = null, string extensionsJsonString = null, UserVerificationMethod userVeritifcationMethod = null, bool residentKey = false, int timeout = 60000)
+        {
+            return Create(challenge, JObject.Parse(rpJsonString), JObject.Parse(userJsonString), JArray.Parse(publickCredParamsJsonArrayString), JArray.Parse(excludedCredentialsJsonArrayString), JObject.Parse(extensionsJsonString), userVeritifcationMethod, residentKey, timeout);
+        }
+
+        public JObject Authenticate(string request, bool uv, bool up = true, string pin = null)
+        {
+            return Authenticate(JObject.Parse(request), uv, up, pin);
+        }
+
+        public JObject Authenticate(JObject request, bool uv, bool up = true, string pin = null)
+        {
+            JArray allowList = null;
+            if (request.ContainsKey("allowCredentials"))
+            {
+                allowList = request["allowCredentials"] as JArray;
+            }
+
+            var userVerificationMethod = new UserVerificationMethod(UserVerificationType.None);
+            if (pin != null)
+            {
+                var pinToken = GetPinToken(pin);
+                userVerificationMethod = new UserVerificationMethod(UserVerificationType.ClientPin, pinToken);
+            }
+            else if (uv)
+            {
+                userVerificationMethod = new UserVerificationMethod(UserVerificationType.BuiltIn);
+            }
+
+            JObject extensions = null;
+            if (request.ContainsKey("extensions"))
+            {
+                extensions = request["extensions"] as JObject;
+            }
+
+            return Authenticate(request["challenge"].ToString(), request["rpId"].ToString(), allowList, userVerificationMethod, up, extensions);
+        }
+
+        public JObject Authenticate(string challenge, string rpid, JArray allowedCredentials = null, UserVerificationMethod userVeritifcationMethod = null, bool userPresence = true, JObject extensions = null, int timeout = 60000)
+        {
+            var clientDataJson = CreateClientDataJson(challenge, rpid, "webauthn.get");
+            var clientDataHash = Utilities.ComputeSha256(Encoding.UTF8.GetBytes(clientDataJson.ToString(Newtonsoft.Json.Formatting.None)));
+            CBORObject allowList = null;
+            CBORObject extensionsCbor = null;
+            byte[] pinAuth = null;
+            int pinProtocol = 1;
+
+            if (allowedCredentials != null)
+            {
+                allowList = CreateCborCredentialsListFromJson(allowedCredentials);
+            }
+
+            if (extensions != null)
+            {
+                extensionsCbor = CreateAuthenticationExtensionCbor(extensions);
+            }
+
+            var options = CreateAuthenticationOptionsCbor(userVeritifcationMethod != null && userVeritifcationMethod.Type == UserVerificationType.BuiltIn, userPresence);
+
+            if (userVeritifcationMethod != null && userVeritifcationMethod.Type == UserVerificationType.ClientPin)
+            {
+                var hmac = new HMACSHA256(userVeritifcationMethod.PinToken);
+                pinAuth = hmac.ComputeHash(clientDataHash).Take(16).ToArray();
+                pinProtocol = userVeritifcationMethod.PinProtocol;
+            }
+
+            var response = _ctap.GetAssertion(rpid, clientDataHash, allowList?.EncodeToBytes(), extensionsCbor?.EncodeToBytes(), options?.EncodeToBytes(), pinAuth, pinProtocol);
+            return CreateAuthenticationResultJson(response.ToCborObject(), clientDataJson);
+        }
+
+        public JObject Authenticate(string challenge, string rpid, string allowedCredentialsJsonArrayString = null, UserVerificationMethod userVeritifcationMethod = null, bool userPresence = true, string extensionsJsonString = null, int timeout = 60000)
+        {
+            return Authenticate(challenge, rpid, JArray.Parse(allowedCredentialsJsonArrayString), userVeritifcationMethod, userPresence, JObject.Parse(extensionsJsonString), timeout);
         }
 
         public JObject GetSecurityKeyInfo()
