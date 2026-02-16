@@ -17,6 +17,16 @@ using System.Text;
 
 namespace PasskeyDotNet
 {
+    /// <summary>
+    /// Represents a passkey management system that facilitates the creation and authentication of passkeys using a FIDO
+    /// security key device.
+    /// </summary>
+    /// <remarks>The Passkey class provides high-level methods for registering and authenticating passkeys in
+    /// accordance with the FIDO2/WebAuthn standards. It manages user verification, PIN setup and changes, and handles
+    /// user presence requirements. The class implements IDisposable to ensure proper cleanup of resources associated
+    /// with the underlying CTAP instance. A user action callback can be supplied to prompt for user interactions, such
+    /// as entering a PIN or touching the security key. Thread safety is not guaranteed; callers should ensure
+    /// appropriate synchronization if accessing instances from multiple threads.</remarks>
     public class Passkey: IDisposable
     {
         private readonly Ctap _ctap;
@@ -35,6 +45,18 @@ namespace PasskeyDotNet
         private KeyAgreement _keyAgreement;
         private Func<UserActionCallbackArgs, UserActionCallbackResult> _userActionCallback;
 
+        /// <summary>
+        /// Initializes a new instance of the Passkey class using the specified Fido security key device and an optional
+        /// user action callback.
+        /// </summary>
+        /// <remarks>The user action callback is triggered when the device requires user presence or
+        /// interaction. This allows custom handling of user prompts, such as displaying UI messages or logging events.
+        /// If no callback is provided, user action events will not be handled explicitly.</remarks>
+        /// <param name="device">The FidoSecurityKeyDevice that represents the security key to be used for authentication operations. Cannot
+        /// be null.</param>
+        /// <param name="userActionCallback">An optional callback that is invoked when user interaction is required, such as touching the security key.
+        /// The callback receives a UserActionCallbackArgs instance and should return a UserActionCallbackResult
+        /// indicating how to proceed.</param>
         public Passkey(FidoSecurityKeyDevice device, Func<UserActionCallbackArgs, UserActionCallbackResult> userActionCallback = null) 
         {
             _ctap = new Ctap(device);
@@ -46,17 +68,46 @@ namespace PasskeyDotNet
             };
         }
 
+        /// <summary>
+        /// Releases all resources used by the current instance of the class.
+        /// </summary>
+        /// <remarks>Call this method when the object is no longer needed to free unmanaged resources and
+        /// perform other cleanup operations. Failing to call this method may result in resource leaks.</remarks>
         public void Dispose()
         {
             _ctap.Dispose();
         }
 
         #region PasskeyCreationOverloads
+        /// <summary>
+        /// Creates a passkey using the specified request and user verification requirements.
+        /// </summary>
+        /// <remarks>The method parses the input request string into a JSON object before processing.
+        /// Ensure that the request string is well-formed to avoid parsing errors.</remarks>
+        /// <param name="request">A JSON-formatted string that defines the parameters for passkey creation. The string must be a valid JSON
+        /// object.</param>
+        /// <param name="userVerification">Specifies the level of user verification required during the passkey creation process.</param>
+        /// <param name="userPresence">Indicates whether user presence is required as part of the passkey creation.</param>
+        /// <returns>A JSON-formatted string representing the created passkey.</returns>
         public string Create(string request, UserVerification userVerification, UserPresence userPresence)
         {
             return Create(JObject.Parse(request), userVerification, userPresence).ToString(Newtonsoft.Json.Formatting.None);
         }
 
+        /// <summary>
+        /// Creates a new JSON object representing a credential creation request using the specified parameters and user
+        /// verification requirements.
+        /// </summary>
+        /// <remarks>The method extracts relevant fields from the provided request object and applies the
+        /// specified user verification and presence requirements. Optional excludeCredentials and extensions are
+        /// included if present in the request.</remarks>
+        /// <param name="request">A JSON object containing the credential creation request data, including fields such as challenge, relying
+        /// party information, user information, public key credential parameters, and optional excludeCredentials and
+        /// extensions.</param>
+        /// <param name="userVerification">Specifies the user verification requirement to be enforced during the credential creation process.</param>
+        /// <param name="userPresence">Indicates the user presence requirement that must be satisfied for the operation to proceed.</param>
+        /// <returns>A JSON object containing the result of the credential creation process, including all necessary information
+        /// for subsequent authentication steps.</returns>
         public JObject Create(JObject request, UserVerification userVerification, UserPresence userPresence)
         {
             JArray excludeCredentials = null;
@@ -73,6 +124,27 @@ namespace PasskeyDotNet
                 request["pubKeyCredParams"] as JArray, userVerification, userPresence, excludeCredentials, extensions);
         }
 
+        /// <summary>
+        /// Creates a new JSON object representing a security credential creation request using the specified challenge,
+        /// relying party, user information, supported credential parameters, user verification, user presence, and
+        /// optional exclusions and extensions.
+        /// </summary>
+        /// <param name="challenge">The challenge string used to ensure the integrity and uniqueness of the credential creation request. Must
+        /// not be null or empty.</param>
+        /// <param name="rp">A JSON object containing information about the relying party, such as its name and identifier. Cannot be
+        /// null.</param>
+        /// <param name="user">A JSON object representing the user for whom the credential is being created, including user ID and display
+        /// name. Cannot be null.</param>
+        /// <param name="publickCredParams">An array of JSON objects specifying the public key credential parameters supported by the client. Cannot be
+        /// null or empty.</param>
+        /// <param name="userVerification">Specifies the user verification requirement for the credential creation process.</param>
+        /// <param name="userPresence">Indicates the expected user presence requirement for the credential creation operation.</param>
+        /// <param name="excludedCredentials">An optional array of JSON objects representing credentials that should be excluded from the creation
+        /// process. May be null if no credentials are to be excluded.</param>
+        /// <param name="extensions">An optional JSON object containing additional extension parameters for the credential creation request. May
+        /// be null if no extensions are required.</param>
+        /// <returns>A JSON object representing the assembled credential creation request, ready to be sent to the client for
+        /// processing.</returns>
         public JObject Create(string challenge, JObject rp, JObject user, JArray publickCredParams, UserVerification userVerification, UserPresence userPresence, 
             JArray excludedCredentials = null, JObject extensions = null)
         {
@@ -119,11 +191,36 @@ namespace PasskeyDotNet
         #endregion
 
         #region PasskeyAutheticationOverloads
+        /// <summary>
+        /// Authenticates a user based on the specified authentication request and verification requirements.
+        /// </summary>
+        /// <remarks>The method parses the input request string into a JSON object before performing
+        /// authentication. Ensure that the request parameter is a valid JSON string to avoid parsing errors.</remarks>
+        /// <param name="request">A JSON-formatted string that represents the authentication request. The string must be a valid JSON object.</param>
+        /// <param name="userVerification">Specifies the level of user verification required for authentication. Possible values include None,
+        /// Preferred, or Required.</param>
+        /// <param name="userPresence">Indicates whether user presence is required during the authentication process. This parameter affects the
+        /// security requirements for the operation.</param>
+        /// <returns>A string containing the result of the authentication process, formatted as a JSON object. The result may
+        /// include success or error information.</returns>
         public string Authenticate(string request, UserVerification userVerification, UserPresence userPresence)
         {
             return Authenticate(JObject.Parse(request), userVerification, userPresence).ToString(Newtonsoft.Json.Formatting.None);
         }
 
+        /// <summary>
+        /// Authenticates a user based on the provided authentication request and verification requirements.
+        /// </summary>
+        /// <remarks>The method extracts the challenge and rpId from the request and processes optional
+        /// allowCredentials and extensions parameters if present. This overload simplifies authentication by accepting
+        /// a single request object and verification options.</remarks>
+        /// <param name="request">A JSON object containing the authentication request details, including the challenge, relying party
+        /// identifier (rpId), and optional allowCredentials and extensions parameters.</param>
+        /// <param name="userVerification">Specifies the user verification requirement for the authentication process. Determines whether user
+        /// verification is required, preferred, or discouraged.</param>
+        /// <param name="userPresence">Indicates whether user presence is required during authentication. Controls if the user must physically
+        /// interact with the authenticator.</param>
+        /// <returns>A JSON array containing the results of the authentication process, including any allowed credentials.</returns>
         public JArray Authenticate(JObject request, UserVerification userVerification, UserPresence userPresence)
         {
             JArray allowList = null;
@@ -141,6 +238,24 @@ namespace PasskeyDotNet
             return Authenticate(request["challenge"].ToString(), request["rpId"].ToString(), userVerification, userPresence, allowList, extensions);
         }
 
+        /// <summary>
+        /// Authenticates a user by verifying their response to a specified challenge using the provided relying party
+        /// identifier, user verification, and user presence requirements.
+        /// </summary>
+        /// <param name="challenge">The challenge string that the user must respond to during the authentication process. This value is
+        /// typically generated by the relying party to ensure the authenticity of the authentication attempt.</param>
+        /// <param name="rpid">The identifier of the relying party requesting authentication. This value is used to scope the
+        /// authentication to a specific service or application.</param>
+        /// <param name="userVerification">Specifies the user verification requirement, such as biometric or PIN, that must be satisfied during
+        /// authentication.</param>
+        /// <param name="userPresence">Indicates the required level of user presence for the authentication process. Determines whether the user
+        /// must be physically present or if presence is discouraged.</param>
+        /// <param name="allowedCredentials">An optional array of credentials that are permitted for authentication. If null, all available credentials
+        /// may be used.</param>
+        /// <param name="extensions">An optional object containing additional parameters or extensions that may influence the authentication
+        /// process.</param>
+        /// <returns>A JArray containing the credentials that were successfully authenticated. The array is empty if no
+        /// credentials are valid or authentication fails.</returns>
         public JArray Authenticate(string challenge, string rpid, UserVerification userVerification, UserPresence userPresence, JArray allowedCredentials = null, JObject extensions = null)
         {
             var securityKeyInfo = GetSecurityKeyInfo();
@@ -193,6 +308,17 @@ namespace PasskeyDotNet
         }
         #endregion
 
+        /// <summary>
+        /// Retrieves information about the connected security key, including supported FIDO versions, extensions,
+        /// algorithms, and key options.
+        /// </summary>
+        /// <remarks>If the security key supports multiple FIDO versions, all supported versions are
+        /// included in the result. The method also identifies supported extensions and algorithms, and provides default
+        /// values if specific information is not available. The returned options indicate the capabilities of the
+        /// security key, such as user presence, user verification, resident key support, and client PIN
+        /// availability.</remarks>
+        /// <returns>A SecurityKeyInfo object that contains details about the supported FIDO versions, extensions, algorithms,
+        /// and options for the security key.</returns>
         public SecurityKeyInfo GetSecurityKeyInfo()
         {
             var securityKeyInfoJson = JObject.Parse(_ctap.GetInfo().ToCborObject().ToJSONString());
@@ -263,6 +389,14 @@ namespace PasskeyDotNet
                 securityKeyInfoJson);
         }
 
+        /// <summary>
+        /// Retrieves the number of remaining attempts allowed for entering the correct PIN on the authenticator.
+        /// </summary>
+        /// <remarks>Call this method only after the authenticator has been properly initialized. The
+        /// returned value can be used to inform users of the number of attempts left before the authenticator is
+        /// locked.</remarks>
+        /// <returns>The number of remaining PIN entry attempts as an integer.</returns>
+        /// <exception cref="Exception">Thrown if the response from the authenticator does not contain the expected data.</exception>
         public int GetPinRetries()
         {
             var ctapResponse = _ctap.GetPinRetries().ToCborObject();
@@ -273,6 +407,15 @@ namespace PasskeyDotNet
             return ctapResponse[3].AsInt32();
         }
 
+        /// <summary>
+        /// Retrieves a secure PIN token for authentication using the specified PIN and protocol version.
+        /// </summary>
+        /// <remarks>The returned PIN token is derived from the provided PIN and protocol version. Ensure
+        /// that the PIN meets any security requirements enforced by the authentication system. The method performs
+        /// cryptographic operations to protect the PIN during the token generation process.</remarks>
+        /// <param name="pin">The PIN value used to generate the authentication token. This parameter must not be null or empty.</param>
+        /// <param name="pinProtocol">The protocol version to use when generating the PIN token. The default is 1.</param>
+        /// <returns>A byte array containing the decrypted PIN token that can be used for authentication purposes.</returns>
         public byte[] GetPinToken(string pin, int pinProtocol = 1)
         {
             if (_keyAgreement == null)
@@ -288,6 +431,14 @@ namespace PasskeyDotNet
             return Utilities.Decrypt(pinTokenEnc, _keyAgreement.Secret, new byte[16]);
         }
 
+        /// <summary>
+        /// Sets a new PIN for user authentication, enforcing security policy requirements.
+        /// </summary>
+        /// <remarks>The PIN is encrypted using a key agreement secret before being sent to the
+        /// authentication system. This method updates the authentication credentials with the new PIN.</remarks>
+        /// <param name="pin">The new PIN to set. Must be at least 4 characters in length and no more than 255 bytes when encoded in
+        /// UTF-8.</param>
+        /// <exception cref="CtapException">Thrown if the specified PIN is shorter than 4 characters or exceeds 255 bytes in length.</exception>
         public void SetPin(string pin)
         {
             if (_keyAgreement == null)
@@ -314,6 +465,15 @@ namespace PasskeyDotNet
             _ctap.SetPin(newPinEnc, _keyAgreement.PlatfromKeyAgreement, pinAuth, 1);
         }
 
+        /// <summary>
+        /// Changes the user's PIN to a new value after validating the current PIN and ensuring the new PIN meets length
+        /// requirements.
+        /// </summary>
+        /// <remarks>A key agreement must be established before calling this method. Ensure that the new
+        /// PIN adheres to the specified length constraints.</remarks>
+        /// <param name="oldPin">The current PIN. This value must match the existing PIN to authorize the change.</param>
+        /// <param name="newPin">The new PIN to set. The value must be at least 4 characters and no more than 255 bytes in UTF-8 encoding.</param>
+        /// <exception cref="CtapException">Thrown if the new PIN does not meet the length requirements or if the old PIN is invalid.</exception>
         public void ChangePin(string oldPin, string newPin)
         {
             if (_keyAgreement == null)
@@ -348,6 +508,12 @@ namespace PasskeyDotNet
             _ctap.ChangePin(pinHashEnc, newPinEnc, _keyAgreement.PlatfromKeyAgreement, pinAuth, 1);
         }
 
+        /// <summary>
+        /// Resets the security key to its default state.
+        /// </summary>
+        /// <remarks>Call this method to reinitialize the security key, clearing any previous
+        /// configuration or state. This is typically used before setting new security parameters to ensure a clean
+        /// starting point.</remarks>
         public void ResetSecurityKey()
         {
             _ctap.Reset();
