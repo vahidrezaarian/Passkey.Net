@@ -15,112 +15,8 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
-// TODO: Implement the passkey selection with GetNextAssertion
-// TODO: Implement a security key reset funciton
-
 namespace PasskeyDotNet
 {
-    public enum UserPresence
-    {   
-        Discouraged,
-        Preferred,
-        Required
-    }
-
-    public enum UserVerification
-    {   
-        Discouraged,
-        Preferred,
-        Required
-    }
-
-    public enum UserVerificationType
-    {
-        BuiltIn,
-        ClientPin,
-        None
-    }
-
-    public enum FidoVersions
-    {
-        FIDO_2_0,
-        FIDO_2_1,
-    }
-
-    public enum Algorithms
-    {
-        ES256 = -7,
-        ES384 = -35,
-        ES512 = -36,
-        RS256 = -257,
-        RS384 = -258,
-        RS512 = -259,
-        EdDSA = -8
-    }
-
-    public enum FidoExtensions
-    {
-        HMACSecret = 1,
-        CredentialProtectionPolicy = 2,
-    }
-
-    public class SecurityKeyInfo
-    {
-        public List<FidoVersions> SupportedFidoVersions;
-        public List<FidoExtensions> SupportedExtensions;
-        public List<Algorithms> SupportedAlgorithms;
-        public bool SupportesUserPresence;
-        public bool SupportsBuildInUserVerification;
-        public bool SupportsClientPinVerification;
-        public bool ClientPinIsSet;
-        public bool SupportsResidentKeyStorage;
-
-        public SecurityKeyInfo(List<FidoVersions> supportedFidoVersions, List<FidoExtensions> supportedExtensions, List<Algorithms> supportedAlgorithms, bool supportesUserPresence, bool supportsBuildInUserVerification, bool supportsClientPinVerification, bool clientPinIsSet, bool supportsResidentKeyStorage)
-        {
-            SupportedFidoVersions = supportedFidoVersions;
-            SupportedExtensions = supportedExtensions;
-            SupportedAlgorithms = supportedAlgorithms;
-            SupportesUserPresence = supportesUserPresence;
-            SupportsBuildInUserVerification = supportsBuildInUserVerification;
-            SupportsClientPinVerification = supportsClientPinVerification;
-            ClientPinIsSet = clientPinIsSet;
-            SupportsResidentKeyStorage = supportsResidentKeyStorage;
-        }
-    }
-
-    public class UserVerificationMethod
-    {
-        public UserVerificationType Type;
-        public byte[] PinToken;
-        public int PinProtocol;
-
-        public UserVerificationMethod(UserVerificationType type, byte[] pinToken = null, int pinProtocol = 1)
-        {
-            Type = type;
-            PinToken = pinToken;
-            PinProtocol = pinProtocol;
-        }
-    }
-
-    public class StatusChangeEventArgs: EventArgs
-    {
-        public string Message { get; set; }
-        public FidoSecurityKeyDevice Device { get; set; }
-    }
-
-    public static partial class Extensions
-    {
-        public static JObject ToJsonObject(this string data)
-        {
-            return JObject.Parse(data);
-        }
-
-        public static JArray ToJsonArrayObject(this string data)
-        {
-            return JArray.Parse(data);
-        }
-    }
-
     public class Passkey: IDisposable
     {
         private readonly Ctap _ctap;
@@ -137,13 +33,17 @@ namespace PasskeyDotNet
             }
         }
         private KeyAgreement _keyAgreement;
+        private Func<UserActionCallbackArgs, UserActionCallbackResult> _userActionCallback;
 
-        public EventHandler<StatusChangeEventArgs> StatusChangeEventHandler; // TODO: Implement the status change event handles based on the status of the device
-
-        public Passkey(FidoSecurityKeyDevice device) 
+        public Passkey(FidoSecurityKeyDevice device, Func<UserActionCallbackArgs, UserActionCallbackResult> userActionCallback = null) 
         {
             _ctap = new Ctap(device);
             _device = device;
+            _userActionCallback = userActionCallback;
+            _device.UserActionRequiredEventHandler += (sender, args) =>
+            {
+                _userActionCallback?.Invoke(new UserActionCallbackArgs(UserActionCallbackActions.TouchSecurityKey));
+            };
         }
 
         public void Dispose()
@@ -152,41 +52,12 @@ namespace PasskeyDotNet
         }
 
         #region PasskeyCreationOverloads
-        public string Create(string request, bool uv, bool rk = true, string pin = null, TimeSpan? timeout = null)
+        public string Create(string request, UserVerification userVerification, UserPresence userPresence, TimeSpan? timeout = null)
         {
-            return Create(JObject.Parse(request), uv, rk, pin, timeout).ToString(Newtonsoft.Json.Formatting.None);
+            return Create(JObject.Parse(request), userVerification, userPresence, timeout).ToString(Newtonsoft.Json.Formatting.None);
         }
 
-        public JObject Create(JObject request, bool uv, bool rk = true, string pin = null, TimeSpan? timeout = null)
-        {
-            JArray excludeCredentials = null;
-            if (request.ContainsKey("excludeCredentials"))
-            {
-                excludeCredentials = request["excludeCredentials"] as JArray;
-            }
-
-            JObject extensions = null;
-            if (request.ContainsKey("extensions"))
-            {
-                extensions = request["extensions"] as JObject;
-            }
-
-            var userVerificationMethod = new UserVerificationMethod(UserVerificationType.None);
-            if (pin != null)
-            {
-                var pinToken = GetPinToken(pin);
-                userVerificationMethod = new UserVerificationMethod(UserVerificationType.ClientPin, pinToken);
-            }
-            else if (uv)
-            {
-                userVerificationMethod = new UserVerificationMethod(UserVerificationType.BuiltIn);
-            }
-
-            return Create(request["challenge"].ToString(), request["rp"] as JObject, request["user"] as JObject,
-                request["pubKeyCredParams"] as JArray, excludeCredentials, extensions, userVerificationMethod, rk, timeout);
-        }
-
-        public JObject Create(JObject request, UserVerification userVerification, UserPresence userPresence, Func<string> getPinFunction = null, Func<string> setPinFunction = null, TimeSpan? timeout = null)
+        public JObject Create(JObject request, UserVerification userVerification, UserPresence userPresence, TimeSpan? timeout = null)
         {
             JArray excludeCredentials = null;
             if (request.ContainsKey("excludeCredentials"))
@@ -199,24 +70,20 @@ namespace PasskeyDotNet
                 extensions = request["extensions"] as JObject;
             }
             return Create(request["challenge"].ToString(), request["rp"] as JObject, request["user"] as JObject,
-                request["pubKeyCredParams"] as JArray, userVerification, userPresence, excludeCredentials, extensions, getPinFunction, setPinFunction, timeout);
-        }
-
-        public string Create(string request, UserVerification userVerification, UserPresence userPresence, Func<string> getPinFunction = null, Func<string> setPinFunction = null, TimeSpan? timeout = null)
-        {
-            return Create(JObject.Parse(request), userVerification, userPresence, getPinFunction, setPinFunction, timeout).ToString(Newtonsoft.Json.Formatting.None);
+                request["pubKeyCredParams"] as JArray, userVerification, userPresence, excludeCredentials, extensions, timeout);
         }
 
         public JObject Create(string challenge, JObject rp, JObject user, JArray publickCredParams, UserVerification userVerification, UserPresence userPresence, 
-            JArray excludedCredentials = null, JObject extensions = null, Func<string> getPinFunction = null, Func<string> setPinFunction = null, TimeSpan? timeout = null)
+            JArray excludedCredentials = null, JObject extensions = null, TimeSpan? timeout = null)
         {
             var securityKeyInfo = GetSecurityKeyInfo();
             CheckUserPresenceSatisfaction(securityKeyInfo, userPresence);
-            var userVerificationMethod = GetUserVerificationMethod(securityKeyInfo, userVerification, getPinFunction, setPinFunction);
+            CheckSupportedAlgorithms(securityKeyInfo, publickCredParams);
+            var userVerificationMethod = GetUserVerificationMethod(securityKeyInfo, userVerification);
             return Create(challenge, rp, user, publickCredParams, excludedCredentials, extensions, userVerificationMethod, userPresence != UserPresence.Discouraged, timeout);
         }
 
-        public JObject Create(string challenge, JObject rp, JObject user, JArray publickCredParams, JArray excludedCredentials = null, JObject extensions = null, UserVerificationMethod userVeritifcationMethod = null,
+        private JObject Create(string challenge, JObject rp, JObject user, JArray publickCredParams, JArray excludedCredentials = null, JObject extensions = null, UserVerificationMethod userVeritifcationMethod = null,
             bool residentKey = false, TimeSpan? timeout = null)
         {
             var clientDataJson = CreateClientDataJson(challenge, rp["id"].ToString(), "webauthn.create");
@@ -225,8 +92,6 @@ namespace PasskeyDotNet
             CBORObject extensionsCbor = null;
             byte[] pinAuth = null;
             int pinProtocol = 1;
-
-            // TODO: Check the public key credential parameters and throw an exception if none of them are supported by the authenticator
 
             if (excludedCredentials != null)
             {
@@ -254,28 +119,17 @@ namespace PasskeyDotNet
         #endregion
 
         #region PasskeyAutheticationOverloads
-        public string Authenticate(string request, bool uv, bool up = true, string pin = null, TimeSpan? timeout = null)
+        public string Authenticate(string request, UserVerification userVerification, UserPresence userPresence, TimeSpan? timeout = null)
         {
-            return Authenticate(JObject.Parse(request), uv, up, pin, timeout).ToString(Newtonsoft.Json.Formatting.None);
+            return Authenticate(JObject.Parse(request), userVerification, userPresence, timeout).ToString(Newtonsoft.Json.Formatting.None);
         }
 
-        public JObject Authenticate(JObject request, bool uv, bool up = true, string pin = null, TimeSpan? timeout = null)
+        public JArray Authenticate(JObject request, UserVerification userVerification, UserPresence userPresence, TimeSpan? timeout = null)
         {
             JArray allowList = null;
             if (request.ContainsKey("allowCredentials"))
             {
                 allowList = request["allowCredentials"] as JArray;
-            }
-
-            var userVerificationMethod = new UserVerificationMethod(UserVerificationType.None);
-            if (pin != null)
-            {
-                var pinToken = GetPinToken(pin);
-                userVerificationMethod = new UserVerificationMethod(UserVerificationType.ClientPin, pinToken);
-            }
-            else if (uv)
-            {
-                userVerificationMethod = new UserVerificationMethod(UserVerificationType.BuiltIn);
             }
 
             JObject extensions = null;
@@ -284,10 +138,18 @@ namespace PasskeyDotNet
                 extensions = request["extensions"] as JObject;
             }
 
-            return Authenticate(request["challenge"].ToString(), request["rpId"].ToString(), allowList, userVerificationMethod, up, extensions, timeout);
+            return Authenticate(request["challenge"].ToString(), request["rpId"].ToString(), userVerification, userPresence, allowList, extensions, timeout);
         }
 
-        public JObject Authenticate(string challenge, string rpid, JArray allowedCredentials = null, UserVerificationMethod userVeritifcationMethod = null, bool userPresence = true, JObject extensions = null, TimeSpan? timeout = null)
+        public JArray Authenticate(string challenge, string rpid, UserVerification userVerification, UserPresence userPresence, JArray allowedCredentials = null, JObject extensions = null, TimeSpan? timeout = null)
+        {
+            var securityKeyInfo = GetSecurityKeyInfo();
+            CheckUserPresenceSatisfaction(securityKeyInfo, userPresence);
+            var userVerificationMethod = GetUserVerificationMethod(securityKeyInfo, userVerification);
+            return Authenticate(challenge, rpid, allowedCredentials, userVerificationMethod, userPresence !=  UserPresence.Discouraged, extensions, timeout);
+        }
+
+        private JArray Authenticate(string challenge, string rpid, JArray allowedCredentials = null, UserVerificationMethod userVeritifcationMethod = null, bool userPresence = true, JObject extensions = null, TimeSpan? timeout = null)
         {
             var clientDataJson = CreateClientDataJson(challenge, rpid, "webauthn.get");
             var clientDataHash = Utilities.ComputeSha256(Encoding.UTF8.GetBytes(clientDataJson.ToString(Newtonsoft.Json.Formatting.None)));
@@ -315,54 +177,25 @@ namespace PasskeyDotNet
                 pinProtocol = userVeritifcationMethod.PinProtocol;
             }
 
+            var responses = new JArray();
             var response = _ctap.GetAssertion(rpid, clientDataHash, allowList?.EncodeToBytes(), extensionsCbor?.EncodeToBytes(), options?.EncodeToBytes(), pinAuth, pinProtocol);
-            return CreateAuthenticationResultJson(response.ToCborObject(), clientDataJson);
-        }
+            var responseCbor = response.ToCborObject();
+            responses.Add(CreateAuthenticationResultJson(responseCbor, clientDataJson));
 
-        public string Authenticate(string request, UserVerification userVerification, UserPresence userPresence, Func<string> getPinFunction = null, Func<string> setPinFunction = null, TimeSpan? timeout = null)
-        {
-            return Authenticate(JObject.Parse(request), userVerification, userPresence, getPinFunction, setPinFunction, timeout).ToString(Newtonsoft.Json.Formatting.None);
-        }
-
-        public JObject Authenticate(JObject request, UserVerification userVerification, UserPresence userPresence, Func<string> getPinFunction = null, Func<string> setPinFunction = null, TimeSpan? timeout = null)
-        {
-            JArray allowList = null;
-            if (request.ContainsKey("allowCredentials"))
+            while (responseCbor.ContainsKey(5) && responseCbor[5].AsInt32() > 0)
             {
-                allowList = request["allowCredentials"] as JArray;
+                response = _ctap.GetNextAssertion();
+                responseCbor = response.ToCborObject();
+                responses.Add(CreateAuthenticationResultJson(responseCbor, clientDataJson));
             }
 
-            JObject extensions = null;
-            if (request.ContainsKey("extensions"))
-            {
-                extensions = request["extensions"] as JObject;
-            }
-
-            return Authenticate(request["challenge"].ToString(), request["rpId"].ToString(), userVerification, userPresence, allowList, extensions, getPinFunction, setPinFunction, timeout);
-        }
-
-        public JObject Authenticate(string challenge, string rpid, UserVerification userVerification, UserPresence userPresence, JArray allowedCredentials = null, JObject extensions = null, Func<string> getPinFunction = null, Func<string> setPinFunction = null, TimeSpan? timeout = null)
-        {
-            var securityKeyInfo = GetSecurityKeyInfo();
-            CheckUserPresenceSatisfaction(securityKeyInfo, userPresence);
-            var userVerificationMethod = GetUserVerificationMethod(securityKeyInfo, userVerification, getPinFunction, setPinFunction);
-            return Authenticate(challenge, rpid, allowedCredentials, userVerificationMethod, userPresence !=  UserPresence.Discouraged, extensions, timeout);
+            return responses;
         }
         #endregion
 
-        public JObject GetSecurityKeyInfoJson()
-        {
-            return JObject.Parse(_ctap.GetInfo().ToCborObject().ToJSONString());
-        }
-
-        public string GetSecurityKeyInfoJsonString()
-        {
-            return _ctap.GetInfo().ToCborObject().ToJSONString();
-        }
-
         public SecurityKeyInfo GetSecurityKeyInfo()
         {
-            var securityKeyInfoJson = GetSecurityKeyInfoJson();
+            var securityKeyInfoJson = JObject.Parse(_ctap.GetInfo().ToCborObject().ToJSONString());
             var supportedFidoVersions = new List<FidoVersions>();
 
             if (securityKeyInfoJson.ContainsKey("1"))
@@ -426,7 +259,8 @@ namespace PasskeyDotNet
                 option.ContainsKey("uv") && (bool)option["uv"],
                 option.ContainsKey("clientPin"),
                 option.ContainsKey("clientPin") && (bool)option["clientPin"],
-                option.ContainsKey("rk") && (bool)option["rk"]);
+                option.ContainsKey("rk") && (bool)option["rk"],
+                securityKeyInfoJson);
         }
 
         public int GetPinRetries()
@@ -454,6 +288,71 @@ namespace PasskeyDotNet
             return Utilities.Decrypt(pinTokenEnc, _keyAgreement.Secret, new byte[16]);
         }
 
+        public void SetPin(string pin)
+        {
+            if (_keyAgreement == null)
+            {
+                _keyAgreement = GetKeyAgreement();
+            }
+
+            if (pin.Length < 4)
+            {
+                throw new CtapException(CtapStatusCode.CTAP2_ERR_PIN_POLICY_VIOLATION, "PIN must be at least 4 characters long!");
+            }
+
+            var newPinBytes = Encoding.UTF8.GetBytes(pin);
+            if (newPinBytes.Length > 255)
+            {
+                throw new CtapException(CtapStatusCode.CTAP2_ERR_PIN_POLICY_VIOLATION, "The PIN is too long!");
+            }
+
+            var newPinEnc = Utilities.Encrypt(newPinBytes, _keyAgreement.Secret, new byte[16], PaddingMode.Zeros);
+
+            var hmac = new HMACSHA256(_keyAgreement.Secret);
+            var pinAuth = hmac.ComputeHash(newPinEnc).Take(16).ToArray();
+
+            _ctap.SetPin(newPinEnc, _keyAgreement.PlatfromKeyAgreement, pinAuth, 1);
+        }
+
+        public void ChangePin(string oldPin, string newPin)
+        {
+            if (_keyAgreement == null)
+            {
+                _keyAgreement = GetKeyAgreement();
+            }
+
+            if (newPin.Length < 4)
+            {
+                throw new CtapException(CtapStatusCode.CTAP2_ERR_PIN_POLICY_VIOLATION, "PIN must be at least 4 characters long!");
+            }
+
+            var newPinBytes = Encoding.UTF8.GetBytes(newPin);
+            if (newPinBytes.Length > 255)
+            {
+                throw new CtapException(CtapStatusCode.CTAP2_ERR_PIN_POLICY_VIOLATION, "The PIN is too long!");
+            }
+
+            var newPinEnc = Utilities.Encrypt(newPinBytes, _keyAgreement.Secret, new byte[16], PaddingMode.Zeros);
+
+            byte[] pinHash = Utilities.ComputeSha256(Encoding.UTF8.GetBytes(oldPin));
+            byte[] pinHashHalf = new byte[16];
+            Array.Copy(pinHash, pinHashHalf, 16);
+            var pinHashEnc = Utilities.Encrypt(pinHashHalf, _keyAgreement.Secret, new byte[16]);
+
+            var pinAuthData = new byte[pinHashEnc.Length + newPinEnc.Length];
+            Array.Copy(newPinEnc, 0, pinAuthData, 0, newPinEnc.Length);
+            Array.Copy(pinHashEnc, 0, pinAuthData, newPinEnc.Length, pinHashEnc.Length);
+            var hmac = new HMACSHA256(_keyAgreement.Secret);
+            var pinAuth = hmac.ComputeHash(pinAuthData).Take(16).ToArray();
+
+            _ctap.ChangePin(pinHashEnc, newPinEnc, _keyAgreement.PlatfromKeyAgreement, pinAuth, 1);
+        }
+
+        public void ResetSecurityKey()
+        {
+            _ctap.Reset();
+        }
+
         private KeyAgreement GetKeyAgreement()
         {
             var authenticatorPublicKey = _ctap.GetKeyAgreement().ToCborObject()[1];
@@ -470,7 +369,6 @@ namespace PasskeyDotNet
                     secret = platform.DeriveKeyFromHash(authenticator.PublicKey, HashAlgorithmName.SHA256);
                 }
 
-                // TODO: Check if we need to change this based on the public key type
                 ECParameters parameters = platform.ExportParameters(false);
 
                 byte[] x = parameters.Q.X;
@@ -537,7 +435,7 @@ namespace PasskeyDotNet
             return userCbor;
         }
 
-        private UserVerificationMethod GetUserVerificationMethod(SecurityKeyInfo securityKeyInfo, UserVerification userVerification, Func<string> getPinFunction, Func<string> setPinFunction)
+        private UserVerificationMethod GetUserVerificationMethod(SecurityKeyInfo securityKeyInfo, UserVerification userVerification)
         {
             if (userVerification == UserVerification.Required && !securityKeyInfo.SupportsBuildInUserVerification && !securityKeyInfo.SupportsClientPinVerification)
             {
@@ -551,29 +449,64 @@ namespace PasskeyDotNet
             var userVerificationMethod = new UserVerificationMethod(UserVerificationType.None);
             if (userVerification == UserVerification.Required || userVerification == UserVerification.Preferred)
             {
-                if (securityKeyInfo.SupportsClientPinVerification)
+                
+                if (securityKeyInfo.SupportsBuildInUserVerification)
                 {
-                    if (!securityKeyInfo.ClientPinIsSet)
-                    {
-                        // TODO: Set the pin if the pin is not set yet (If the setPinFunction is paasssesd)
-                        throw new Exception("Security Key pin is not set");
-                    }
-                    else if (getPinFunction is null)
+                    return new UserVerificationMethod(UserVerificationType.BuiltIn);
+                }
+                else
+                {
+                    if (_userActionCallback is null)
                     {
                         throw new Exception("No GetPin callback is passed!");
                     }
 
-                    if (GetPinRetries() <= 0)
+                    string pin;
+                    if (!securityKeyInfo.ClientPinIsSet)
                     {
-                        throw new CtapException(CtapStatusCode.CTAP2_ERR_PIN_BLOCKED, "Security Key PIN is blocked!");
+                        if (_userActionCallback != null)
+                        {
+                            pin = _userActionCallback(new UserActionCallbackArgs(UserActionCallbackActions.SetPin)).Pin;
+                            SetPin(pin);
+                        }
+                        else
+                        {
+                            throw new Exception("Security Key pin is not set");
+                        }
+                    }
+                    else
+                    {
+                        if (GetPinRetries() <= 0)
+                        {
+                            throw new CtapException(CtapStatusCode.CTAP2_ERR_PIN_BLOCKED, "Security Key PIN is blocked!");
+                        }
+
+                        pin = _userActionCallback(new UserActionCallbackArgs(UserActionCallbackActions.GetPin)).Pin;
                     }
 
-                    return new UserVerificationMethod(UserVerificationType.ClientPin, GetPinToken(getPinFunction()));
+                    byte[] pinToken;
+                    while (true)
+                    {
+                        try
+                        {
+                            pinToken = GetPinToken(pin);
+                            break;
+                        }
+                        catch (CtapException ex)
+                        {
+                            if (ex.StatusCode == CtapStatusCode.CTAP2_ERR_PIN_INVALID)
+                            {
+                                _keyAgreement = null;
+                                pin = _userActionCallback(new UserActionCallbackArgs(UserActionCallbackActions.GetPinWithWrongPinMessage)).Pin;
+                                continue;
+                            }
+                            throw new CtapException(ex.StatusCode, ex.Message);
+                        }
+                    }
+
+                    return new UserVerificationMethod(UserVerificationType.ClientPin, pinToken);
                 }
-                else
-                {
-                    return new UserVerificationMethod(UserVerificationType.BuiltIn);
-                }
+                
             }
             return new UserVerificationMethod(UserVerificationType.None);
         }
@@ -583,6 +516,27 @@ namespace PasskeyDotNet
             if (_device.DeviceInfo.Transport != Transports.NFC && userPresence == UserPresence.Required && !securityKeyInfo.SupportesUserPresence)
             {
                 throw new Exception("User presence is required but the authenticator doesn't support it!");
+            }
+        }
+
+        private static void CheckSupportedAlgorithms(SecurityKeyInfo securityKeyInfo, JArray pubKeyCredParams)
+        {
+            var supportedAlgorithms = securityKeyInfo.SupportedAlgorithms;
+            if (supportedAlgorithms.Any())
+            {
+                bool supportedAlgorithmFound = false;
+                foreach (var algorithm in pubKeyCredParams)
+                {
+                    if (supportedAlgorithms.Contains((Algorithms)(int)algorithm["alg"]))
+                    {
+                        supportedAlgorithmFound = true;
+                        break;
+                    }
+                }
+                if (!supportedAlgorithmFound)
+                {
+                    throw new Exception("None of the requested algorithms are supported by the authenticator!");
+                }
             }
         }
 
