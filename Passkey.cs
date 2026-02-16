@@ -52,12 +52,12 @@ namespace PasskeyDotNet
         }
 
         #region PasskeyCreationOverloads
-        public string Create(string request, UserVerification userVerification, UserPresence userPresence, TimeSpan? timeout = null)
+        public string Create(string request, UserVerification userVerification, UserPresence userPresence)
         {
-            return Create(JObject.Parse(request), userVerification, userPresence, timeout).ToString(Newtonsoft.Json.Formatting.None);
+            return Create(JObject.Parse(request), userVerification, userPresence).ToString(Newtonsoft.Json.Formatting.None);
         }
 
-        public JObject Create(JObject request, UserVerification userVerification, UserPresence userPresence, TimeSpan? timeout = null)
+        public JObject Create(JObject request, UserVerification userVerification, UserPresence userPresence)
         {
             JArray excludeCredentials = null;
             if (request.ContainsKey("excludeCredentials"))
@@ -70,21 +70,21 @@ namespace PasskeyDotNet
                 extensions = request["extensions"] as JObject;
             }
             return Create(request["challenge"].ToString(), request["rp"] as JObject, request["user"] as JObject,
-                request["pubKeyCredParams"] as JArray, userVerification, userPresence, excludeCredentials, extensions, timeout);
+                request["pubKeyCredParams"] as JArray, userVerification, userPresence, excludeCredentials, extensions);
         }
 
         public JObject Create(string challenge, JObject rp, JObject user, JArray publickCredParams, UserVerification userVerification, UserPresence userPresence, 
-            JArray excludedCredentials = null, JObject extensions = null, TimeSpan? timeout = null)
+            JArray excludedCredentials = null, JObject extensions = null)
         {
             var securityKeyInfo = GetSecurityKeyInfo();
             CheckUserPresenceSatisfaction(securityKeyInfo, userPresence);
             CheckSupportedAlgorithms(securityKeyInfo, publickCredParams);
             var userVerificationMethod = GetUserVerificationMethod(securityKeyInfo, userVerification);
-            return Create(challenge, rp, user, publickCredParams, excludedCredentials, extensions, userVerificationMethod, userPresence != UserPresence.Discouraged, timeout);
+            return Create(challenge, rp, user, publickCredParams, excludedCredentials, extensions, userVerificationMethod, userPresence != UserPresence.Discouraged);
         }
 
         private JObject Create(string challenge, JObject rp, JObject user, JArray publickCredParams, JArray excludedCredentials = null, JObject extensions = null, UserVerificationMethod userVeritifcationMethod = null,
-            bool residentKey = false, TimeSpan? timeout = null)
+            bool residentKey = false)
         {
             var clientDataJson = CreateClientDataJson(challenge, rp["id"].ToString(), "webauthn.create");
             var clientDataHash = Utilities.ComputeSha256(Encoding.UTF8.GetBytes(clientDataJson.ToString(Newtonsoft.Json.Formatting.None)));
@@ -119,12 +119,12 @@ namespace PasskeyDotNet
         #endregion
 
         #region PasskeyAutheticationOverloads
-        public string Authenticate(string request, UserVerification userVerification, UserPresence userPresence, TimeSpan? timeout = null)
+        public string Authenticate(string request, UserVerification userVerification, UserPresence userPresence)
         {
-            return Authenticate(JObject.Parse(request), userVerification, userPresence, timeout).ToString(Newtonsoft.Json.Formatting.None);
+            return Authenticate(JObject.Parse(request), userVerification, userPresence).ToString(Newtonsoft.Json.Formatting.None);
         }
 
-        public JArray Authenticate(JObject request, UserVerification userVerification, UserPresence userPresence, TimeSpan? timeout = null)
+        public JArray Authenticate(JObject request, UserVerification userVerification, UserPresence userPresence)
         {
             JArray allowList = null;
             if (request.ContainsKey("allowCredentials"))
@@ -138,18 +138,18 @@ namespace PasskeyDotNet
                 extensions = request["extensions"] as JObject;
             }
 
-            return Authenticate(request["challenge"].ToString(), request["rpId"].ToString(), userVerification, userPresence, allowList, extensions, timeout);
+            return Authenticate(request["challenge"].ToString(), request["rpId"].ToString(), userVerification, userPresence, allowList, extensions);
         }
 
-        public JArray Authenticate(string challenge, string rpid, UserVerification userVerification, UserPresence userPresence, JArray allowedCredentials = null, JObject extensions = null, TimeSpan? timeout = null)
+        public JArray Authenticate(string challenge, string rpid, UserVerification userVerification, UserPresence userPresence, JArray allowedCredentials = null, JObject extensions = null)
         {
             var securityKeyInfo = GetSecurityKeyInfo();
             CheckUserPresenceSatisfaction(securityKeyInfo, userPresence);
             var userVerificationMethod = GetUserVerificationMethod(securityKeyInfo, userVerification);
-            return Authenticate(challenge, rpid, allowedCredentials, userVerificationMethod, userPresence !=  UserPresence.Discouraged, extensions, timeout);
+            return Authenticate(challenge, rpid, allowedCredentials, userVerificationMethod, userPresence !=  UserPresence.Discouraged, extensions);
         }
 
-        private JArray Authenticate(string challenge, string rpid, JArray allowedCredentials = null, UserVerificationMethod userVeritifcationMethod = null, bool userPresence = true, JObject extensions = null, TimeSpan? timeout = null)
+        private JArray Authenticate(string challenge, string rpid, JArray allowedCredentials = null, UserVerificationMethod userVeritifcationMethod = null, bool userPresence = true, JObject extensions = null)
         {
             var clientDataJson = CreateClientDataJson(challenge, rpid, "webauthn.get");
             var clientDataHash = Utilities.ComputeSha256(Encoding.UTF8.GetBytes(clientDataJson.ToString(Newtonsoft.Json.Formatting.None)));
