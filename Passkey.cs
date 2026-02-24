@@ -151,11 +151,19 @@ namespace PasskeyDotNet
         public JObject Create(string challenge, JObject rp, JObject user, JArray publickCredParams, UserVerification userVerification, UserPresence userPresence, 
             JArray excludedCredentials = null, JObject extensions = null)
         {
-            var securityKeyInfo = GetSecurityKeyInfo();
-            CheckUserPresenceSatisfaction(securityKeyInfo, userPresence);
-            CheckSupportedAlgorithms(securityKeyInfo, publickCredParams);
-            var userVerificationMethod = GetUserVerificationMethod(securityKeyInfo, userVerification);
-            return Create(challenge, rp, user, publickCredParams, excludedCredentials, extensions, userVerificationMethod, userPresence != UserPresence.Discouraged);
+            try
+            {
+                var securityKeyInfo = GetSecurityKeyInfo();
+                CheckUserPresenceSatisfaction(securityKeyInfo, userPresence);
+                CheckSupportedAlgorithms(securityKeyInfo, publickCredParams);
+                var userVerificationMethod = GetUserVerificationMethod(securityKeyInfo, userVerification);
+                return Create(challenge, rp, user, publickCredParams, excludedCredentials, extensions, userVerificationMethod, userPresence != UserPresence.Discouraged);
+            }
+            catch
+            {
+                _ctap.Cancel();
+                throw;
+            }
         }
 
         private JObject Create(string challenge, JObject rp, JObject user, JArray publickCredParams, JArray excludedCredentials = null, JObject extensions = null, UserVerificationMethod userVeritifcationMethod = null,
@@ -264,10 +272,18 @@ namespace PasskeyDotNet
         /// <exception cref="OperationCanceledException">Thrown if the user cancels the operation when his/her action is required.</exception>
         public JArray Authenticate(string challenge, string rpid, UserVerification userVerification, UserPresence userPresence, JArray allowedCredentials = null, JObject extensions = null)
         {
-            var securityKeyInfo = GetSecurityKeyInfo();
-            CheckUserPresenceSatisfaction(securityKeyInfo, userPresence);
-            var userVerificationMethod = GetUserVerificationMethod(securityKeyInfo, userVerification);
-            return Authenticate(challenge, rpid, allowedCredentials, userVerificationMethod, userPresence !=  UserPresence.Discouraged, extensions);
+            try
+            {
+                var securityKeyInfo = GetSecurityKeyInfo();
+                CheckUserPresenceSatisfaction(securityKeyInfo, userPresence);
+                var userVerificationMethod = GetUserVerificationMethod(securityKeyInfo, userVerification);
+                return Authenticate(challenge, rpid, allowedCredentials, userVerificationMethod, userPresence != UserPresence.Discouraged, extensions);
+            }
+            catch
+            {
+                _ctap.Cancel();
+                throw;
+            }
         }
 
         private JArray Authenticate(string challenge, string rpid, JArray allowedCredentials = null, UserVerificationMethod userVeritifcationMethod = null, bool userPresence = true, JObject extensions = null)

@@ -17,10 +17,10 @@ dotnet add package Passkey.Net
 
 Or in your .csproj:
 ```XML
-<PackageReference Include="Passkey.Net" Version="1.1.0" />
+<PackageReference Include="Passkey.Net" Version="1.1.2" />
 ```
 
-The latest version: https://www.nuget.org/packages/Passkey.Net/1.1.0
+The latest version: https://www.nuget.org/packages/Passkey.Net/1.1.2
 
 ## How to use
 You simply need to look for a FIDO security key device, choose one and create an object of Passkey class using the found device. Then call the passkey related functions for that device.
