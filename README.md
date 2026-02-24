@@ -17,15 +17,14 @@ dotnet add package Passkey.Net
 
 Or in your .csproj:
 ```XML
-<PackageReference Include="Passkey.Net" Version="1.0.0" />
+<PackageReference Include="Passkey.Net" Version="1.1.0" />
 ```
 
-The latest version: https://www.nuget.org/packages/Passkey.Net/1.0.0
+The latest version: https://www.nuget.org/packages/Passkey.Net/1.1.0
 
 ## How to use
 You simply need to look for a FIDO security key device, choose one and create an object of Passkey class using the found device. Then call the passkey related functions for that device.
 ```C#
-
 foreach (var device in FidoSecurityKeyDevices.AllDevices)
 {
     using (var passkey = new Passkey(device, UserActionCallback)) // Make sure the passkey object is disposed when finished
@@ -83,6 +82,9 @@ foreach (var device in FidoSecurityKeyDevices.AllDevices)
 // You can handle this callback and implement a UI
 UserActionCallbackResult UserActionCallback(UserActionCallbackArgs args)
 {
+    // Cancel the operation
+    // return args.Cancel();
+
     if (args.Action == UserActionCallbackActions.TouchSecurityKey)
     {
         Console.WriteLine("Touch your security key");

@@ -89,6 +89,7 @@ namespace PasskeyDotNet
         /// <param name="userVerification">Specifies the level of user verification required during the passkey creation process.</param>
         /// <param name="userPresence">Indicates whether user presence is required as part of the passkey creation.</param>
         /// <returns>A JSON-formatted string representing the created passkey.</returns>
+        /// <exception cref="OperationCanceledException">Thrown if the user cancels the operation when his/her action is required.</exception>
         public string Create(string request, UserVerification userVerification, UserPresence userPresence)
         {
             return Create(JObject.Parse(request), userVerification, userPresence).ToString(Newtonsoft.Json.Formatting.None);
@@ -108,6 +109,7 @@ namespace PasskeyDotNet
         /// <param name="userPresence">Indicates the user presence requirement that must be satisfied for the operation to proceed.</param>
         /// <returns>A JSON object containing the result of the credential creation process, including all necessary information
         /// for subsequent authentication steps.</returns>
+        /// <exception cref="OperationCanceledException">Thrown if the user cancels the operation when his/her action is required.</exception>
         public JObject Create(JObject request, UserVerification userVerification, UserPresence userPresence)
         {
             JArray excludeCredentials = null;
@@ -145,6 +147,7 @@ namespace PasskeyDotNet
         /// be null if no extensions are required.</param>
         /// <returns>A JSON object representing the assembled credential creation request, ready to be sent to the client for
         /// processing.</returns>
+        /// <exception cref="OperationCanceledException">Thrown if the user cancels the operation when his/her action is required.</exception>
         public JObject Create(string challenge, JObject rp, JObject user, JArray publickCredParams, UserVerification userVerification, UserPresence userPresence, 
             JArray excludedCredentials = null, JObject extensions = null)
         {
@@ -203,6 +206,7 @@ namespace PasskeyDotNet
         /// security requirements for the operation.</param>
         /// <returns>A string containing the result of the authentication process, formatted as a JSON object. The result may
         /// include success or error information.</returns>
+        /// <exception cref="OperationCanceledException">Thrown if the user cancels the operation when his/her action is required.</exception>
         public string Authenticate(string request, UserVerification userVerification, UserPresence userPresence)
         {
             return Authenticate(JObject.Parse(request), userVerification, userPresence).ToString(Newtonsoft.Json.Formatting.None);
@@ -221,6 +225,7 @@ namespace PasskeyDotNet
         /// <param name="userPresence">Indicates whether user presence is required during authentication. Controls if the user must physically
         /// interact with the authenticator.</param>
         /// <returns>A JSON array containing the results of the authentication process, including any allowed credentials.</returns>
+        /// <exception cref="OperationCanceledException">Thrown if the user cancels the operation when his/her action is required.</exception>
         public JArray Authenticate(JObject request, UserVerification userVerification, UserPresence userPresence)
         {
             JArray allowList = null;
@@ -256,6 +261,7 @@ namespace PasskeyDotNet
         /// process.</param>
         /// <returns>A JArray containing the credentials that were successfully authenticated. The array is empty if no
         /// credentials are valid or authentication fails.</returns>
+        /// <exception cref="OperationCanceledException">Thrown if the user cancels the operation when his/her action is required.</exception>
         public JArray Authenticate(string challenge, string rpid, UserVerification userVerification, UserPresence userPresence, JArray allowedCredentials = null, JObject extensions = null)
         {
             var securityKeyInfo = GetSecurityKeyInfo();
@@ -672,7 +678,6 @@ namespace PasskeyDotNet
 
                     return new UserVerificationMethod(UserVerificationType.ClientPin, pinToken);
                 }
-                
             }
             return new UserVerificationMethod(UserVerificationType.None);
         }

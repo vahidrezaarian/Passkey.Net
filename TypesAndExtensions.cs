@@ -214,6 +214,8 @@ namespace PasskeyDotNet
     /// <summary>
     /// Represents the arguments for a user action callback, containing the specific action that needs to be performed during authentication or credential management processes.
     /// </summary>
+    /// <remarks> Call the Cancel method of this object if you wish to cancel the operation which requires the user action.
+    /// </remarks>
     public class UserActionCallbackArgs
     {
         /// <summary>
@@ -229,6 +231,14 @@ namespace PasskeyDotNet
         {
             Action = action;
         }
+
+        /// <summary>
+        /// Cancels the operation which ended requiring the user action.
+        /// </summary>
+        public UserActionCallbackResult Cancel()
+        {
+            throw new OperationCanceledException();
+        }
     }
 
     /// <summary>
@@ -240,6 +250,7 @@ namespace PasskeyDotNet
         /// The current PIN entered by the user, which is required for operations such as authentication or verifying the existing PIN before allowing a change. This property should be securely handled to prevent exposure of sensitive information.
         /// </summary>
         public string Pin;
+
         /// <summary>
         /// The new PIN entered by the user, which is required for operations that involve setting a new PIN or changing an existing PIN. This property is optional and should only be provided when the action involves setting or changing a PIN. Ensure that the new PIN meets security requirements and is handled securely to prevent unauthorized access.
         /// </summary>

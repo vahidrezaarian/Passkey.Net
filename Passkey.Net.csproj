@@ -11,7 +11,7 @@
 
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Passkey.Net</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Authors>Vahidreza Arian</Authors>
     <Description>.NET and .NET Framework library for FIDO2 passkey creation and authentication.</Description>
     <PackageTags>webauthn;fido2;passkeys;ctap;fido;passkey</PackageTags>
@@ -28,7 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Ctap.Net" Version="1.0.2" />
+    <PackageReference Include="Ctap.Net" Version="1.0.3" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="PeterO.Cbor" Version="4.5.5" />
   </ItemGroup>
