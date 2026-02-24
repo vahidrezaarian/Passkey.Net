@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net472;net8.0-windows;net10.0-windows</TargetFrameworks>
@@ -11,7 +11,7 @@
 
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Passkey.Net</PackageId>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <Authors>Vahidreza Arian</Authors>
     <Description>.NET and .NET Framework library for FIDO2 passkey creation and authentication.</Description>
     <PackageTags>webauthn;fido2;passkeys;ctap;fido;passkey</PackageTags>
@@ -19,7 +19,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
 	<PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/vahidrezaarian/Passkey.Net</RepositoryUrl>
-    <PackageReleaseNotes>Initial release of a class library which provides passkey creation and authentication.</PackageReleaseNotes>
+    <PackageReleaseNotes>Bug fixes. Implemented the operation canceled exception handling.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,7 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Ctap.Net" Version="1.0.3" />
+    <PackageReference Include="Ctap.Net" Version="1.0.4" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="PeterO.Cbor" Version="4.5.5" />
   </ItemGroup>
