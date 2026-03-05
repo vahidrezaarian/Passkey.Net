@@ -23,14 +23,14 @@ namespace PasskeyDotNet
     /// </summary>
     /// <remarks>The Passkey class provides high-level methods for registering and authenticating passkeys in
     /// accordance with the FIDO2/WebAuthn standards. It manages user verification, PIN setup and changes, and handles
-    /// user presence requirements. The class implements IDisposable to ensure proper cleanup of resources associated
-    /// with the underlying CTAP instance. A user action callback can be supplied to prompt for user interactions, such
+    /// user presence requirements. A user action callback can be supplied to prompt for user interactions, such
     /// as entering a PIN or touching the security key. Thread safety is not guaranteed; callers should ensure
     /// appropriate synchronization if accessing instances from multiple threads.</remarks>
-    public class Passkey: IDisposable
+    public class Passkey
     {
         private readonly Ctap _ctap;
         private readonly FidoSecurityKeyDevice _device;
+        private readonly SecurityKeyInfo _securityKeyInfo;
         private class KeyAgreement
         {
             public readonly byte[] Secret;
@@ -57,7 +57,7 @@ namespace PasskeyDotNet
         /// <param name="userActionCallback">An optional callback that is invoked when user interaction is required, such as touching the security key.
         /// The callback receives a UserActionCallbackArgs instance and should return a UserActionCallbackResult
         /// indicating how to proceed.</param>
-        public Passkey(FidoSecurityKeyDevice device, Func<UserActionCallbackArgs, UserActionCallbackResult> userActionCallback = null) 
+        public Passkey(FidoSecurityKeyDevice device, Func<UserActionCallbackArgs, UserActionCallbackResult> userActionCallback = null)
         {
             _ctap = new Ctap(device);
             _device = device;
@@ -66,16 +66,7 @@ namespace PasskeyDotNet
             {
                 _userActionCallback?.Invoke(new UserActionCallbackArgs(UserActionCallbackActions.TouchSecurityKey));
             };
-        }
-
-        /// <summary>
-        /// Releases all resources used by the current instance of the class.
-        /// </summary>
-        /// <remarks>Call this method when the object is no longer needed to free unmanaged resources and
-        /// perform other cleanup operations. Failing to call this method may result in resource leaks.</remarks>
-        public void Dispose()
-        {
-            _ctap.Dispose();
+            _securityKeyInfo = GetSecurityKeyInfo();
         }
 
         #region PasskeyCreationOverloads
@@ -148,18 +139,17 @@ namespace PasskeyDotNet
         /// <returns>A JSON object representing the assembled credential creation request, ready to be sent to the client for
         /// processing.</returns>
         /// <exception cref="OperationCanceledException">Thrown if the user cancels the operation when his/her action is required.</exception>
-        public JObject Create(string challenge, JObject rp, JObject user, JArray publickCredParams, UserVerification userVerification, UserPresence userPresence, 
+        public JObject Create(string challenge, JObject rp, JObject user, JArray publickCredParams, UserVerification userVerification, UserPresence userPresence,
             JArray excludedCredentials = null, JObject extensions = null)
         {
             try
             {
-                var securityKeyInfo = GetSecurityKeyInfo();
-                CheckUserPresenceSatisfaction(securityKeyInfo, userPresence);
-                CheckSupportedAlgorithms(securityKeyInfo, publickCredParams);
-                var userVerificationMethod = GetUserVerificationMethod(securityKeyInfo, userVerification);
+                CheckUserPresenceSatisfaction(_securityKeyInfo, userPresence);
+                CheckSupportedAlgorithms(_securityKeyInfo, publickCredParams);
+                var userVerificationMethod = GetUserVerificationMethod(_securityKeyInfo, userVerification);
                 return Create(challenge, rp, user, publickCredParams, excludedCredentials, extensions, userVerificationMethod, userPresence != UserPresence.Discouraged);
             }
-            catch
+            catch (OperationCanceledException)
             {
                 _ctap.Cancel();
                 throw;
@@ -274,12 +264,11 @@ namespace PasskeyDotNet
         {
             try
             {
-                var securityKeyInfo = GetSecurityKeyInfo();
-                CheckUserPresenceSatisfaction(securityKeyInfo, userPresence);
-                var userVerificationMethod = GetUserVerificationMethod(securityKeyInfo, userVerification);
+                CheckUserPresenceSatisfaction(_securityKeyInfo, userPresence);
+                var userVerificationMethod = GetUserVerificationMethod(_securityKeyInfo, userVerification);
                 return Authenticate(challenge, rpid, allowedCredentials, userVerificationMethod, userPresence != UserPresence.Discouraged, extensions);
             }
-            catch
+            catch (OperationCanceledException)
             {
                 _ctap.Cancel();
                 throw;
@@ -402,7 +391,7 @@ namespace PasskeyDotNet
             {
                 option = securityKeyInfoJson["4"] as JObject;
             }
-            return new SecurityKeyInfo(supportedFidoVersions, supportedExtensions, supportedAlgorithms, 
+            return new SecurityKeyInfo(supportedFidoVersions, supportedExtensions, supportedAlgorithms,
                 option.ContainsKey("up") && (bool)option["up"],
                 option.ContainsKey("uv") && (bool)option["uv"],
                 option.ContainsKey("clientPin"),
@@ -468,18 +457,7 @@ namespace PasskeyDotNet
                 _keyAgreement = GetKeyAgreement();
             }
 
-            if (pin.Length < 4)
-            {
-                throw new CtapException(CtapStatusCode.CTAP2_ERR_PIN_POLICY_VIOLATION, "PIN must be at least 4 characters long!");
-            }
-
-            var newPinBytes = Encoding.UTF8.GetBytes(pin);
-            if (newPinBytes.Length > 255)
-            {
-                throw new CtapException(CtapStatusCode.CTAP2_ERR_PIN_POLICY_VIOLATION, "The PIN is too long!");
-            }
-
-            var newPinEnc = Utilities.Encrypt(newPinBytes, _keyAgreement.Secret, new byte[16], PaddingMode.Zeros);
+            var newPinEnc = Utilities.Encrypt(GetNewPinBytes(pin), _keyAgreement.Secret, new byte[16], PaddingMode.Zeros);
 
             var hmac = new HMACSHA256(_keyAgreement.Secret);
             var pinAuth = hmac.ComputeHash(newPinEnc).Take(16).ToArray();
@@ -503,18 +481,7 @@ namespace PasskeyDotNet
                 _keyAgreement = GetKeyAgreement();
             }
 
-            if (newPin.Length < 4)
-            {
-                throw new CtapException(CtapStatusCode.CTAP2_ERR_PIN_POLICY_VIOLATION, "PIN must be at least 4 characters long!");
-            }
-
-            var newPinBytes = Encoding.UTF8.GetBytes(newPin);
-            if (newPinBytes.Length > 255)
-            {
-                throw new CtapException(CtapStatusCode.CTAP2_ERR_PIN_POLICY_VIOLATION, "The PIN is too long!");
-            }
-
-            var newPinEnc = Utilities.Encrypt(newPinBytes, _keyAgreement.Secret, new byte[16], PaddingMode.Zeros);
+            var newPinEnc = Utilities.Encrypt(GetNewPinBytes(newPin), _keyAgreement.Secret, new byte[16], PaddingMode.Zeros);
 
             byte[] pinHash = Utilities.ComputeSha256(Encoding.UTF8.GetBytes(oldPin));
             byte[] pinHashHalf = new byte[16];
@@ -603,12 +570,9 @@ namespace PasskeyDotNet
                     {
                         transportsCbor.Add(transport);
                     }
+
+                    credentialCbor.Add("transports", transportsCbor);
                 }
-                else
-                {
-                    transportsCbor.Add("usb");
-                }
-                credentialCbor.Add("transports", transportsCbor);
                 cborCredentialsList.Add(credentialCbor);
             }
             return cborCredentialsList;
@@ -637,7 +601,7 @@ namespace PasskeyDotNet
             var userVerificationMethod = new UserVerificationMethod(UserVerificationType.None);
             if (userVerification == UserVerification.Required || userVerification == UserVerification.Preferred)
             {
-                
+
                 if (securityKeyInfo.SupportsBuildInUserVerification)
                 {
                     return new UserVerificationMethod(UserVerificationType.BuiltIn);
@@ -652,15 +616,8 @@ namespace PasskeyDotNet
                     string pin;
                     if (!securityKeyInfo.ClientPinIsSet)
                     {
-                        if (_userActionCallback != null)
-                        {
-                            pin = _userActionCallback(new UserActionCallbackArgs(UserActionCallbackActions.SetPin)).Pin;
-                            SetPin(pin);
-                        }
-                        else
-                        {
-                            throw new Exception("Security Key pin is not set");
-                        }
+                        pin = _userActionCallback(new UserActionCallbackArgs(UserActionCallbackActions.SetPin)).Pin;
+                        SetPin(pin);
                     }
                     else
                     {
@@ -725,6 +682,26 @@ namespace PasskeyDotNet
                     throw new Exception("None of the requested algorithms are supported by the authenticator!");
                 }
             }
+        }
+
+        private static byte[] GetNewPinBytes(string pin)
+        {
+            if (pin.Length < 4)
+            {
+                throw new CtapException(CtapStatusCode.CTAP2_ERR_PIN_POLICY_VIOLATION, "PIN must be at least 4 characters long!");
+            }
+
+            var pinBytes = Encoding.UTF8.GetBytes(pin);
+            if (pinBytes.Length > 255)
+            {
+                throw new CtapException(CtapStatusCode.CTAP2_ERR_PIN_POLICY_VIOLATION, "The PIN is too long!");
+            }
+            if (pinBytes.Length < 64)
+            {
+                Array.Resize(ref pinBytes, 64);
+            }
+
+            return pinBytes;
         }
 
         #region AuthenticationCeremonyHelpers
@@ -799,7 +776,7 @@ namespace PasskeyDotNet
 
                         var results = new JObject()
                         {
-                            ["first"] =saltResult1
+                            ["first"] = saltResult1
                         };
                         if (saltResult2 != null)
                         {
@@ -1024,21 +1001,28 @@ namespace PasskeyDotNet
             return result;
         }
 
-        private static CBORObject CreateRegistrationExtensionsCborObject(JObject extensionsJson)
+        private CBORObject CreateRegistrationExtensionsCborObject(JObject extensionsJson)
         {
             var extensionsCbor = CBORObject.NewMap();
-            if (extensionsJson.ContainsKey("hmacCreateSecret") && (bool)extensionsJson["hmacCreateSecret"])
+
+            if (_securityKeyInfo.SupportedExtensions.Contains(FidoExtensions.HMACSecret))
             {
-                extensionsCbor.Add("hmac-secret", true);
-            }
-            else if (extensionsJson.ContainsKey("prf"))
-            {
-                extensionsCbor.Add("hmac-secret", true);
+                if (extensionsJson.ContainsKey("hmacCreateSecret") && (bool)extensionsJson["hmacCreateSecret"])
+                {
+                    extensionsCbor.Add("hmac-secret", true);
+                }
+                else if (extensionsJson.ContainsKey("prf"))
+                {
+                    extensionsCbor.Add("hmac-secret", true);
+                }
             }
 
-            if (extensionsJson.ContainsKey("enforceCredentialProtectionPolicy") && (bool)extensionsJson["enforceCredentialProtectionPolicy"])
+            if (_securityKeyInfo.SupportedExtensions.Contains(FidoExtensions.CredentialProtectionPolicy))
             {
-                extensionsCbor.Add("credProtect", 1);
+                if (extensionsJson.ContainsKey("enforceCredentialProtectionPolicy") && (bool)extensionsJson["enforceCredentialProtectionPolicy"])
+                {
+                    extensionsCbor.Add("credProtect", 1);
+                }
             }
 
             if (extensionsCbor.Count > 0)
